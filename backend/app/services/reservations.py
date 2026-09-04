@@ -35,10 +35,11 @@ async def calculate_total_revenue(property_id: str, tenant_id: str) -> Dict[str,
     """
     Aggregates revenue from database.
     """
+    print(f"DEBUG RESERVATIONS: calculate_total_revenue called - property_id={property_id}, tenant_id={tenant_id}")
     try:
         # Import database pool
         from app.core.database_pool import DatabasePool
-        
+
         # Initialize pool if needed
         db_pool = DatabasePool()
         await db_pool.initialize()
@@ -66,15 +67,17 @@ async def calculate_total_revenue(property_id: str, tenant_id: str) -> Dict[str,
                 
                 if row:
                     total_revenue = Decimal(str(row.total_revenue))
+                    print(f"DEBUG RESERVATIONS: REAL DB QUERY SUCCESS - property_id={property_id}, tenant_id={tenant_id}, total={total_revenue}, count={row.reservation_count}")
                     return {
                         "property_id": property_id,
                         "tenant_id": tenant_id,
                         "total": str(total_revenue),
-                        "currency": "USD", 
+                        "currency": "USD",
                         "count": row.reservation_count
                     }
                 else:
                     # No reservations found for this property
+                    print(f"DEBUG RESERVATIONS: REAL DB QUERY SUCCESS but no rows - property_id={property_id}, tenant_id={tenant_id}")
                     return {
                         "property_id": property_id,
                         "tenant_id": tenant_id,
@@ -84,10 +87,16 @@ async def calculate_total_revenue(property_id: str, tenant_id: str) -> Dict[str,
                     }
         else:
             raise Exception("Database pool not available")
-            
+
     except Exception as e:
-        print(f"Database error for {property_id} (tenant: {tenant_id}): {e}")
-        
+        # This is the fallback bug: everything below here is TENANT-BLIND -
+        # mock_data is keyed only by property_id, so any two tenants hitting
+        # this except block for the same property_id get IDENTICAL numbers.
+        # This branch should never fire in a working system; if you see this
+        # print during testing, the real DB path above is broken (check
+        # database_pool.py's initialization for the actual error).
+        print(f"DEBUG RESERVATIONS: FALLBACK MOCK DATA USED (tenant-blind!) - Database error for {property_id} (tenant: {tenant_id}): {e}")
+
         # Create property-specific mock data for testing when DB is unavailable
         # This ensures each property shows different figures
         mock_data = {
